@@ -1,0 +1,32 @@
+{
+    "_doc": "Standalone shared calibrator. Writes CalibrationEvent JSON to each consumer's inbox so grid and live see the same model_prob.",
+    "inbox_targets": [
+        "results/calibration_inbox_grid",
+        "results/calibration_inbox_live"
+    ],
+    "snapshot_path": "results/terminal_data.shared.json",
+    "delay_min_seconds": 0.0,
+    "delay_max_seconds": 0.0,
+    "_delay_note": "0/0 = continuous loop, matches the previous in-process worker cadence.",
+    "inbox_ttl_seconds": 300.0,
+    "_inbox_ttl_note": "Sweep inbox files older than this so a stopped consumer doesn't cause unbounded growth.",
+    "source_label": "shared_calc",
+    "market_scan_interval_seconds": 30.0,
+
+    "_archive_note": "On-chain Chainlink BTC/USD fallback (Polygon mainnet) for restart protection. Used ONLY when the WS buffer doesn't have a needed point - typically after calc downtime longer than the 180s buffer window. Set POLYGON_RPC_URLS env var to override (comma-separated). Empty list disables the fallback (degrades to WS-only).",
+    "polygon_rpc_urls": [
+        "https://polygon-bor-rpc.publicnode.com",
+        "https://polygon-rpc.com"
+    ],
+
+    "_spot_provider_note": "Current BTC spot uses Polymarket public RTDS Chainlink BTC/USD first. If RTDS is stale, falls back to a median of top-of-book WebSocket mids, then Binance REST as last resort. Barrier/PTB and settlement retrieval are unaffected.",
+    "spot_price_provider_enabled": true,
+    "spot_rtds_stale_after_seconds": 10.0,
+    "spot_rtds_refresh_seconds": 5.0,
+    "spot_ws_fallback_enabled": true,
+    "spot_ws_sources": ["coinbase", "kraken", "bitstamp", "gemini", "bitfinex", "binance"],
+    "spot_ws_stale_after_seconds": 10.0,
+    "spot_ws_outlier_bps": 20.0,
+    "spot_ws_min_sources": 3,
+    "spot_rest_last_resort_enabled": true
+}

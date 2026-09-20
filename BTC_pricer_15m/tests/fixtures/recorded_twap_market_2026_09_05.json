@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "description": "Recorded historical decision inputs and later public resolution. The contemporaneous book depth and smile forward were not exported; replay assumes smile forward equals observed spot and must not invent liquidity. The separately captured current TWAP message is a codec observation, not this historical market's closing price.",
+  "recorded_stream": "market.calibration",
+  "historical": {
+    "stream_id": "1788598501755-0",
+    "event": {
+      "barrier": 79618.84521058318,
+      "barrier_offset_s": 0,
+      "barrier_source": "polymarket",
+      "calibration_seconds": 2.028850793838501,
+      "down_best_ask": 0.34,
+      "event_id": "1788598501667-7d55341fe4e346f79c10b1e368f294f6",
+      "market_end_time_iso": "2026-09-05T09:00:00+00:00",
+      "market_id": "btc-updown-15m-1788597900",
+      "model_used": "ssvi_surface",
+      "prob_above": 0.5591566666666667,
+      "prob_below": 0.4408433333333333,
+      "prob_model": "mc",
+      "ready_at_iso": "2026-09-05T08:55:01.667048+00:00",
+      "ready_at_unix_ms": 1788598501667,
+      "schema_version": 4,
+      "source": "shared_calc",
+      "spot_details": {
+        "details": {
+          "health": {
+            "binance": true,
+            "bitfinex": false,
+            "bitstamp": true,
+            "coinbase": true,
+            "gemini": false,
+            "kraken": true
+          },
+          "rtds": {
+            "price": 79626.7607571474,
+            "receive_age_seconds": 0.0026748180389404297,
+            "source_age_seconds": 1.649893045425415,
+            "source_timestamp_ms": 1788598499000
+          },
+          "source_order": [
+            "polymarket_rtds",
+            "ws_median",
+            "binance_rest_last_resort"
+          ]
+        },
+        "price": 79626.7607571474,
+        "published_at_ms": 1788598500649,
+        "receive_age_seconds": 0.002,
+        "received_at_ms": 1788598500647,
+        "schema_version": 1,
+        "sequence": 89778,
+        "source": "polymarket_rtds",
+        "source_age_seconds": 1.649,
+        "source_label": "Polymarket RTDS Chainlink",
+        "source_timestamp_ms": 1788598499000,
+        "stale_after_seconds": 10,
+        "symbol": "BTC/USD"
+      },
+      "spot_price": 79626.7607571474,
+      "spot_published_at_ms": 1788598500649,
+      "spot_sequence": 89778,
+      "spot_source": "polymarket_rtds",
+      "spot_source_label": "Polymarket RTDS Chainlink",
+      "terminal_payload": {
+        "avg_prob_above": 0.5591566666666667,
+        "avg_prob_below": 0.4408433333333333,
+        "bl_mc_divergence": null,
+        "bl_prob_above": null,
+        "bl_prob_below": null,
+        "cf_mc_divergence": 0.034182945395396014,
+        "direction": "down",
+        "heston": null,
+        "preferred_model": "ssvi_surface",
+        "probability_mode": "mc",
+        "probability_source_label": "SSVI Surface MC",
+        "selected_prob_above": 0.5591566666666667,
+        "selected_prob_below": 0.4408433333333333,
+        "spot_price": 79626.7607571474,
+        "ssvi_surface": {
+          "cf_prob_above": 0.5249737212712707,
+          "cf_prob_below": 0.47502627872872927,
+          "mc_prob_above": 0.5591566666666667,
+          "mc_prob_below": 0.4408433333333333,
+          "params": {
+            "butterfly_cond1": 0.00040929214600705146,
+            "butterfly_cond2": 0.9846742836858674,
+            "butterfly_satisfied": true,
+            "phi": 2405.798140257749,
+            "rho": 0.06399659899942771,
+            "theta": 1.598946697574611e-7,
+            "ttm": 0.000009517890999315538
+          },
+          "prob_above": null,
+          "prob_below": null,
+          "r_squared": 0.9395864014907571,
+          "surface_params": {
+            "eta": 0.9620024498279967,
+            "expiry_names": [
+              "6SEP26",
+              "7SEP26",
+              "8SEP26",
+              "9SEP26"
+            ],
+            "lam": 0.5,
+            "per_slice": [
+              {
+                "butterfly_cond1": 0.0068078784331706155,
+                "butterfly_cond2": 0.9846742836858674,
+                "butterfly_satisfied": true,
+                "phi": 144.63746574676682,
+                "rho": 0.06399659899942771,
+                "theta": 0.0000442375176104428,
+                "ttm": 0.0026332827187746134
+              },
+              {
+                "butterfly_cond1": 0.014393697400266307,
+                "butterfly_cond2": 0.9846742836858674,
+                "butterfly_satisfied": true,
+                "phi": 68.41010035876184,
+                "rho": 0.06399659899942771,
+                "theta": 0.00019774790945603738,
+                "ttm": 0.005371133505906715
+              },
+              {
+                "butterfly_cond1": 0.02182814794776977,
+                "butterfly_cond2": 0.9846742836858673,
+                "butterfly_satisfied": true,
+                "phi": 45.11029914411376,
+                "rho": 0.06399659899942771,
+                "theta": 0.0004547795649197133,
+                "ttm": 0.008108984293038817
+              },
+              {
+                "butterfly_cond1": 0.0286214366618909,
+                "butterfly_cond2": 0.9846742836858673,
+                "butterfly_satisfied": true,
+                "phi": 34.40338426466724,
+                "rho": 0.06399659899942771,
+                "theta": 0.0007818978581736031,
+                "ttm": 0.010846835080170918
+              }
+            ],
+            "rho": 0.06399659899942771,
+            "thetas": [
+              0.0000442375176104428,
+              0.00019774790945603738,
+              0.0004547795649197133,
+              0.0007818978581736031
+            ],
+            "ttms": [
+              0.0026332827187746134,
+              0.005371133505906715,
+              0.008108984293038817,
+              0.010846835080170918
+            ]
+          }
+        },
+        "target_price": 79618.84521058318,
+        "terminal_return_ttm_days": 0.0034764096875000003,
+        "timestamp": "2026-09-05T08:55:01.661166+00:00",
+        "timing": {
+          "bl_s": null,
+          "books_s": 2.08,
+          "calibration_s": 0.00022172927856445312,
+          "cf_s": 0.000017881393432617188,
+          "cycle_s": 2.1924,
+          "deribit_surface_fingerprint": "500285590764b0cde621d9c073af401668ad35edf737eb7d25b63363274cea06",
+          "mc_s": 0.7370204925537109,
+          "spot_refresh_used": true,
+          "surface_bl_s": null,
+          "surface_fit_method": "warm_start_deferred",
+          "surface_fit_reused": false,
+          "surface_fit_s": 0.8957111835479736,
+          "surface_warm_start_used": true
+        },
+        "ttm_days": 0.0034764096875000003
+      },
+      "terminal_return_ttm_days": 0.0034764096875000003,
+      "up_best_ask": 0.67
+    }
+  },
+  "public_verification": {
+    "captured_at_utc": "2026-09-05T09:40:46.788483+00:00",
+    "market_url": "https://gamma-api.polymarket.com/markets/slug/btc-updown-15m-1788597900",
+    "resolution_url": "https://clob.polymarket.com/markets/0xa42f9f7808c4654202f9aadb8415085c98ec5340988ab3d1352cea30ed7c5104",
+    "market": {
+      "id": "4210290",
+      "slug": "btc-updown-15m-1788597900",
+      "question": "Bitcoin Up or Down - September 5, 4:45AM-5:00AM ET",
+      "conditionId": "0xa42f9f7808c4654202f9aadb8415085c98ec5340988ab3d1352cea30ed7c5104",
+      "resolutionSource": "https://data.chain.link/streams/btc-usd-twap-60s-streams",
+      "description": "This market will resolve to \"Up\" if the time-weighted average price (TWAP) of Bitcoin, generated by Chainlink, of the time range specified in the title is greater than or equal to the price at the beginning of that range. Otherwise, it will resolve to \"Down\".\nThe resolution source for this market is information from Chainlink, specifically the BTC/USD TWAP data stream available at https://data.chain.link/streams/btc-usd-twap-60s-streams.\nPlease note that this market is about the price according to the TWAP Chainlink data stream for the asset pair BTC/USD, not according to any other sources or spot markets.",
+      "outcomes": "[\"Up\", \"Down\"]",
+      "clobTokenIds": "[\"87859261057412322539222017765935532748251653199305321042935961509801607256786\", \"48823024430089212849777940608954409589374332583099329896400931167746028564955\"]",
+      "feesEnabled": true,
+      "feeSchedule": {
+        "exponent": 1,
+        "rate": 0.07,
+        "takerOnly": true,
+        "rebateRate": 0.2
+      },
+      "active": true,
+      "closed": true,
+      "acceptingOrders": false,
+      "endDate": "2026-09-05T09:00:00Z"
+    },
+    "resolution": {
+      "condition_id": "0xa42f9f7808c4654202f9aadb8415085c98ec5340988ab3d1352cea30ed7c5104",
+      "closed": true,
+      "active": true,
+      "tokens": [
+        {
+          "token_id": "87859261057412322539222017765935532748251653199305321042935961509801607256786",
+          "outcome": "Up",
+          "price": 1,
+          "winner": true
+        },
+        {
+          "token_id": "48823024430089212849777940608954409589374332583099329896400931167746028564955",
+          "outcome": "Down",
+          "price": 0,
+          "winner": false
+        }
+      ]
+    },
+    "oracle_message": {
+      "connection_id": "gZe1RK-W-WeIKEji_A==",
+      "payload": {
+        "full_accuracy_value": "79668536615732670103552",
+        "symbol": "btc/usd",
+        "timestamp": 1788601245000,
+        "value": 79668.53661573266,
+        "window_s": 60
+      },
+      "timestamp": 1788601246406,
+      "topic": "crypto_prices_twap_sixty",
+      "type": "update"
+    },
+    "oracle_observation": {
+      "schema_version": 1,
+      "symbol": "BTC/USD",
+      "window_seconds": 60,
+      "value": "79668.536615732670103552",
+      "source_timestamp_ms": 1788601245000,
+      "received_at_ms": 1788601246775,
+      "source": "chainlink_twap_60s"
+    },
+    "oracle_source": "wss://ws-live-data.polymarket.com"
+  },
+  "replay_assumptions": {
+    "smile_forward": "recorded spot (historical forward unavailable)",
+    "book_depth": "unavailable",
+    "n_simulations": 300000,
+    "step_seconds": 5
+  }
+}

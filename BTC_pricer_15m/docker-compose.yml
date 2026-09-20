@@ -1,0 +1,412 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: btc_pricer_15m_redis
+    # Persistence is DISABLED on purpose. This redis is a pure IPC transport:
+    # MAXLEN-bounded streams of live calibration/market/mirror events that calc
+    # republishes within seconds of a restart. No code path ever reads persisted
+    # history, so an RDB/AOF on disk buys nothing -- and it cost us a 3-hour
+    # outage: an unclean death left a garbled appendonly.aof.*.incr.aof, redis
+    # then refused to start with "Bad file format reading the append only file"
+    # and crash-looped 166 times, taking grid + live down with it ("Name or
+    # service not known" on redis:6379) because the failure was permanent
+    # rather than self-healing. Disabling AOF+RDB removes that failure class
+    # entirely and also removes the BGSAVE/AOF-rewrite fork whose copy-on-write
+    # spike previously OOM-killed redis under a tighter mem_limit.
+    # If persistence is ever genuinely needed again, add
+    # `--aof-load-truncated yes` AND a start-up repair step -- do not just flip
+    # appendonly back on.
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    restart: unless-stopped
+    # Redis is single-threaded for command execution; 0.1 is ample headroom over
+    # the ~3% of one core it actually uses as a pure IPC transport. Capped so a
+    # busy-loop here can never starve calc/grid of CPU.
+    cpus: 0.1
+    # Working set is ~490 MB (MAXLEN-bounded streams). With no persistence there
+    # is no fork/COW spike to size for, but keep generous headroom for client
+    # output buffers and stream growth; an OOM-killed redis still stalls trading.
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  spot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_spot
+    command: ["python", "-u", "-m", "scripts.trader.spot_daemon", "--config", "config.yaml", "-v"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    cpus: 0.1
+    # Light spot-price daemon (~115 MB idle); 384 MB gives 3x headroom.
+    mem_limit: 384m
+    memswap_limit: 384m
+    mem_reservation: 128m
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from pathlib import Path; import time, sys; p=Path('results/spot_daemon.health'); sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+  calc:
+    # Shared calibration daemon. Runs the SSVI surface fit + configured
+    # payoff probability once per cycle and publishes calibration events through
+    # Redis Streams, with legacy per-consumer inbox files kept as fallback
+    # during migration. Grid and live no longer compute their own probabilities,
+    # eliminating model_prob drift between the two trading engines.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_calc
+    command: ["python", "-u", "-m", "scripts.trader.calc_daemon", "--config", "config.yaml", "-v"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      NUMBA_NUM_THREADS: "2"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      spot:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Measured 300k-path/600s TWAP MC: 0.92s on one core, 0.46s on two.
+    # Leave room for model refresh and the two-second entry freshness budget.
+    cpus: 2.0
+    # SSVI fit + Monte Carlo can spike well above idle (~155 MB); 1 GB headroom.
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    mem_reservation: 512m
+    pids_limit: 4096
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from pathlib import Path; import time, sys; p=Path('results/calc_daemon.health'); sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<120 else 1)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+  grid:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_grid
+    command: ["python", "-u", "-m", "scripts.trader.main", "--mode", "grid", "--config", "config.yaml", "-v"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      NUMBA_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      spot:
+        condition: service_healthy
+      calc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cpus: 1.0
+    # 1296 instances + staged-entry buffers; idle ~286 MB, peaks during
+    # settlement/snapshot writes. 1280 MB keeps wide margin over peak.
+    mem_limit: 1280m
+    memswap_limit: 1280m
+    mem_reservation: 256m
+    pids_limit: 8192
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from pathlib import Path; import time, sys; lock=Path('results/trader.lock'); fresh=lock.exists() and time.time()-lock.stat().st_mtime<120; sys.exit(0 if fresh else 1)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+  live:
+    # Only starts under the "local-live" profile — `python manage.py live local`
+    # handles that. A bare `docker compose up -d` brings up only `grid`, so there
+    # is no risk of auto-starting live alongside a VPS live.
+    profiles: ["local-live"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_live
+    command:
+      [
+        "python",
+        "-u",
+        "-m",
+        "scripts.trader.main",
+        "--mode",
+        "trader",
+        "--live-only",
+        "--live-config",
+        "config.yaml",
+        "-v",
+      ]
+    init: true
+    env_file:
+      - .env
+    environment:
+      NUMBA_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      spot:
+        condition: service_healthy
+      calc:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cpus: 0.1
+    # Single live trader, very light (~75 MB); 768 MB is ample.
+    mem_limit: 768m
+    memswap_limit: 768m
+    mem_reservation: 512m
+    pids_limit: 2048
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from pathlib import Path; import time, sys; lock=Path('results/single_trader.lock'); fresh=lock.exists() and time.time()-lock.stat().st_mtime<120; sys.exit(0 if fresh else 1)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+  docker-logs:
+    build:
+      context: ../POLYMARKET_STREAMING_DASHBOARD_15m
+      dockerfile: Dockerfile
+      target: docker-logs
+    container_name: polymarket_15m_docker_logs
+    environment:
+      DOCKER_CONTAINER: btc_pricer_15m_grid
+    restart: unless-stopped
+    cpus: 0.1
+    mem_limit: 128m
+    memswap_limit: 128m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8799/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+  dashboard:
+    build:
+      context: ../POLYMARKET_STREAMING_DASHBOARD_15m
+      dockerfile: Dockerfile
+      target: dashboard
+      additional_contexts:
+        runtime_helpers: .
+    container_name: polymarket_dashboard_15m
+    env_file:
+      - ../POLYMARKET_STREAMING_DASHBOARD_15m/.env
+    environment:
+      RESULTS_DIR: /data/results
+      CONFIG_DIR: /data
+      REDIS_URL: redis://redis:6379/0
+      BTC_SPOT_REDIS_URL: redis://redis:6379/0
+      DOCKER_LOGS_URL: http://docker-logs:8799
+    depends_on:
+      docker-logs:
+        condition: service_healthy
+      spot:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      # Localhost-only: the dashboard has no auth when DASHBOARD_API_TOKEN is
+      # unset, so don't publish live positions/PnL to the LAN. To view from
+      # another device, revert to "5175:8798" AND set a token in the dashboard
+      # .env (the in-container healthcheck is unaffected either way).
+      - "127.0.0.1:5175:8798"
+    restart: unless-stopped
+    # FastAPI + async collectors + `docker logs` tailing; ~1% of one core in
+    # steady state. 0.1 is the fleet-wide cap (cpu_limits.bat), which still
+    # covers steady state ~10x over, but WebSocket fan-out and frontend build
+    # spikes now queue instead of bursting. Raise it if the UI loads slowly.
+    cpus: 0.1
+    # Hard cap so a dashboard memory regression can't exhaust host RAM. The
+    # backend's per-instance buffers are now bounded (see trades_tail.py); this
+    # is the backstop. memswap_limit==mem_limit disables swap escape. Sits at
+    # ~1.0 GB / 68% under the old 1.5 GB cap, so 2 GB restores real headroom.
+    mem_limit: 2048m
+    memswap_limit: 2048m
+    mem_reservation: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8798/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ./results:/data/results:ro
+      - ./config.yaml:/data/config.yaml:ro
+      - ./config_grid.json:/data/config_grid.json:ro
+      - ./config_trader_live.json:/data/config_trader_live.json:ro
+
+  # Passive liveness watchdog: restarts stack containers that were stopped.
+  # Counterpart to scripts/live_watchdog.py, which STOPS live on fatal patterns.
+  #
+  # Between 2026-07-27 and 2026-08-14 the whole stack sat stopped for ~18 days
+  # unnoticed. `restart: unless-stopped` (every other service here) deliberately
+  # does NOT bring a container back once explicitly stopped -- not even across
+  # daemon restarts -- and nothing watched the stack.
+  #
+  # This service is the ONLY one with `restart: always`, and that is the whole
+  # trick: unlike unless-stopped, `always` DOES restart a manually-stopped
+  # container when the Docker daemon restarts, and Docker Desktop has
+  # AutoStart=True. So a `docker compose stop` that takes this down along with
+  # everything else is undone at the next sign-in, and the watchdog then repairs
+  # the rest. Keep the others on unless-stopped so `manage.py stop` still works
+  # as documented.
+  #
+  # Not profile-gated on purpose: it must join every plain `docker compose up -d`.
+  watchdog:
+    build:
+      context: .
+      dockerfile: Dockerfile.watchdog
+    container_name: btc_pricer_15m_watchdog
+    restart: always
+    environment:
+      WATCHDOG_RESULTS_DIR: /data/results
+      WATCHDOG_POLL_SECONDS: "60"
+      # Don't fight a `compose up` still in progress.
+      WATCHDOG_STARTUP_GRACE_SECONDS: "120"
+      # Hold live down if live_watchdog.py deliberately stopped it. Set 0 to
+      # always restart live regardless.
+      WATCHDOG_RESPECT_LIVE_TRIGGER: "1"
+      WATCHDOG_MAX_RECOVERY_FAILURES: "3"
+    # Sleeps between 60s polls and shells out to `docker start`; measured at 0.00%.
+    # A tenth of a core is generous and guarantees the recovery path stays schedulable
+    # even when calc/grid are saturating their own caps.
+    cpus: 0.1
+    mem_limit: 128m
+    memswap_limit: 128m
+    mem_reservation: 32m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,time;from pathlib import Path;h=Path('/data/results/watchdog.health');sys.exit(0 if h.exists() and time.time()-float(h.read_text())<300 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 150s
+    volumes:
+      # Read-write, unlike the dashboard's :ro mount -- starting containers is
+      # a write operation on the daemon socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./results:/data/results
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    name: btc_pricer_15m_net
+    ipam:
+      config:
+        - subnet: ${BTC_PRICER_DOCKER_SUBNET:-10.250.251.0/24}

@@ -1,0 +1,22 @@
+# Passive stack liveness watchdog (scripts/stack_liveness.py).
+#
+# Deliberately tiny and dependency-free: it must be the most reliable container
+# in the stack, since it is the thing that repairs the others. Only the static
+# Docker CLI is added for health-gated recovery of explicitly desired services.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz \
+       | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/stack_liveness.py ./scripts/stack_liveness.py
+COPY scripts/stack_services.py scripts/live_runtime_state.py ./scripts/
+
+CMD ["python", "-u", "scripts/stack_liveness.py"]

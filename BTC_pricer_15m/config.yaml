@@ -1,0 +1,394 @@
+api:
+  base_url: "https://www.deribit.com/api/v2/public/"
+  timeout: 10
+  max_retries: 3
+
+filters:
+  min_open_interest: 0  # Include all options regardless of open interest
+  max_bid_ask_spread_pct: 2.0  # Relaxed for short-dated options (200%)
+  min_days_to_expiry: 0
+  moneyness_range: [0.5, 1.5]
+  min_surface_points: 5  # Minimum data points for surface fitting
+
+# Relaxed filters for test scripts (even more permissive for testing)
+filters_relaxed:
+  min_open_interest: 1  # Very relaxed for testing
+  max_bid_ask_spread_pct: 0.50  # 50% spread allowed
+  min_days_to_expiry: 0
+  moneyness_range: [0.5, 1.5]  # Wider moneyness range
+  min_surface_points: 5
+
+ssvi:
+  rho_bounds: [-0.99, 0.99]
+  phi_bounds: [0.001, 5.0]
+  theta_bounds: [0.001, 10.0]
+  optimizer: "L-BFGS-B"
+  # TTM-adaptive settings for short-dated options
+  short_dated_ttm_threshold: 0.10  # ~36 days
+  short_dated_phi_bounds: [0.001, 20.0]
+  # Multi-start optimization
+  use_multi_start: true
+  n_starts: 5
+  # Global optimizer fallback
+  use_global_optimizer: true
+  global_optimizer: "differential_evolution"
+  # Objective function settings
+  use_relative_error: true
+  regularization_lambda: 0.001
+  workers: 1                  # Per-slice DE is serial; local CPU parallelism is used by Numba MC kernels
+  # Per-slice optimizer economics: market IVs are noisy at ~1e-2 relative,
+  # so tighter tolerances only burn iterations.
+  local_ftol: 1.0e-7          # was 1e-10
+  local_maxiter: 200          # was 500
+  early_stop_r2: 0.95         # stop multi-starts once a start fits this well (0 = run all)
+
+heston:
+  v0_bounds: [0.01, 4.0]
+  kappa_bounds: [0.01, 20.0]
+  theta_bounds: [0.01, 8.0]
+  xi_bounds: [0.1, 10.0]
+  rho_bounds: [-0.99, 0.99]
+  optimizer: "differential_evolution"
+  n_starts: 6
+  n_integration_points: 128
+  use_quantlib: true  # Use QuantLib for better numerical precision
+  early_termination_sse: 1.0e-5  # Skip remaining multi-starts when SSE below threshold (null to disable)
+
+model:
+  default_model: "ssvi"
+  trading_model: "ssvi_surface"  # Model for trading probabilities: "ssvi_surface" or "heston"
+  # Probability source: "mc" (production), "cf" closed-form digital, "avg" MC+B-L, "bl".
+  # NOTE: "cf" (static -dC/dK on the SSVI smile) diverges from the sticky-moneyness
+  # MC by 1.0-2.5pp near ATM at production micro-TTM phi (400-1400) — they are
+  # different models, NOT numerically equivalent (verified 8M-path benchmark
+  # 2026-07-10). The grid's edge thresholds were tuned on MC, so MC stays the
+  # trading source; cf is computed every tick as a diagnostic (cf_prob_* +
+  # cf_mc_divergence in the terminal payload).
+  probability_mode: "mc"
+  cf_shadow_mc_every_n_ticks: 5   # cf mode only: run shadow MC every Nth tick (0 = never)
+  cf_mc_divergence_alert: 0.02    # cf mode only: WARN when |cf - mc| exceeds this
+  min_calibration_ttm_days: 1.0  # Skip expiries < 1 day for calibration (use longer expiry)
+  iv_consistency_threshold: 0.10
+  iv_consistency_relaxation: 0.15
+  iv_consistency_ttm_cutoff: 0.05
+
+breeden_litzenberger:
+  strike_grid_points: 500
+  strike_range_std: 3.0
+  use_log_strikes: false  # Use log-moneyness spacing for better tails
+
+intraday:
+  use_drift: false
+  annual_drift: 0.0
+  standard_horizons: [1, 2, 4, 6, 8, 12, 24, 48, 72]
+
+iv_solver:
+  tolerance: 1.0e-8
+  min_iv: 0.01
+  max_iv: 5.0
+  max_iterations: 150
+
+validation:
+  spot_price_min: 10000
+  spot_price_max: 1000000
+  iv_valid_range: [0.05, 5.0]
+  iv_normal_range: [0.10, 3.0]
+  iv_typical_range: [0.20, 2.0]
+  r_squared_excellent: 0.90
+  r_squared_acceptable: 0.80
+  r_squared_poor: 0.50
+  integral_tolerance: 0.05
+  mean_forward_tolerance: 0.10
+
+ssvi_surface:
+  enabled: true               # Joint SSVI surface fit (Gatheral & Jacquier 2014)
+  max_ttm_days: 4.0           # Only include expiries within this TTM window
+  min_expiries: 2             # Need at least 2 slices for surface fit
+  eta_bounds: [0.01, 10.0]    # Power-law scale: φ(θ) = η·θ^(-λ)
+  lam_bounds: [0.0, 0.5]      # Gatheral constraint: λ ∈ [0, 0.5]
+  rho_bounds: [-0.99, 0.99]   # Global skew bounds
+  maxiter: 300
+  workers: 1                  # Surface DE is serial; multiprocessing overhead dominates this 3-param objective
+  use_relative_error: true
+  fallback_to_independent: true  # Fall back to per-slice if joint fit is worse
+  warm_start_path: "results/ssvi_surface_warm.json"  # Cache surface params across restarts/subprocess fallback
+  # --- Fit-speed levers (each individually revertable via config restart) ---
+  reuse_max_age_seconds: 0.0     # accept cached fit up to N seconds on fingerprint miss (0 = off; consider 12.0 after soak)
+  per_slice_global_de: false     # skip per-slice DE fallback inside the surface fitter (joint fit has its own global pass + gates)
+  defer_per_slice_fits: true     # try the warm-start candidate first; per-slice fits only on rejection
+  full_refit_every_n: 50         # with defer: force a full re-fit every N accepted warm fits
+  local_first: true              # try L-BFGS-B from x0 before full differential evolution
+
+monte_carlo:
+  n_simulations: 300000      # With TRUE antithetic pairing, run-to-run SD ~0.05pp — matches the old 1M fake-antithetic noise at ~25x less compute (~40ms/call)
+  n_steps_per_day: 1440      # 1-minute steps (high accuracy)
+  confidence_level: 0.95
+  use_antithetic: true       # Variance reduction
+
+output:
+  save_json: true
+  save_plots: true
+  plot_format: "png"
+  dpi: 150
+
+app:
+  results_dir: "results"
+
+ipc:
+  backend: "redis"
+  redis_url: "redis://redis:6379/0"
+  redis_stream: "market.calibration"
+  file_fallback_enabled: true
+
+persistence:
+  backend: "sqlite"
+  export_legacy_files: true
+  market_db_path: "results/db/markets.sqlite"
+  paper_db_path: "results/db/15m_paper.sqlite"
+  live_db_path: "results/db/15m_live.sqlite"
+
+calc:
+  inbox_targets:
+    - "results/calibration_inbox_grid"
+    - "results/calibration_inbox_live"
+  snapshot_path: "results/terminal_data.shared.json"
+  # Post-overhaul the cycle itself runs in ~0.4s; this floor paces the free-run
+  # loop to ~0.8-1.0s cadence so Deribit isn't polled at 2.5 Hz for fingerprint
+  # hits. Set both to 0.0 for maximum cadence.
+  delay_min_seconds: 0.35
+  delay_max_seconds: 0.55
+  inbox_ttl_seconds: 300.0
+  source_label: "shared_calc"
+  market_scan_interval_seconds: 30.0
+  polygon_rpc_urls:
+    - "https://polygon-bor-rpc.publicnode.com"
+    - "https://polygon-rpc.com"
+  ipc_backend: "redis"
+  redis_url: "redis://redis:6379/0"
+  redis_stream: "market.calibration"
+  redis_maxlen: 10000
+  ipc_file_fallback_enabled: true
+  market_db_path: "results/db/markets.sqlite"
+
+spot:
+  redis_url: "redis://redis:6379/0"
+  latest_key: "market:spot:btc_usd:latest"
+  stream: "market.spot.btc_usd"
+  channel: "market.spot.btc_usd"
+  redis_maxlen: 20000
+  rtds_stale_after_seconds: 10.0
+  max_age_seconds: 10.0
+  ws_fallback_enabled: true
+  ws_sources: ["coinbase", "kraken", "bitstamp", "gemini", "bitfinex", "binance"]
+  ws_stale_after_seconds: 10.0
+  ws_outlier_bps: 20.0
+  ws_min_sources: 3
+  rest_last_resort_enabled: true
+  publish_interval_seconds: 0.1
+  fallback_republish_seconds: 1.0
+
+market_context:
+  enabled: true
+  redis_url: "redis://redis:6379/0"
+  latest_key: "market:context:btc_updown_15m:latest"
+  stream: "market.context.btc_updown_15m"
+  channel: "market.context.btc_updown_15m"
+  redis_maxlen: 10000
+
+leaderboard_ipc:
+  enabled: true
+  redis_url: "redis://redis:6379/0"
+  latest_key: "grid:leaderboard:15m:latest"
+  stream: "grid.leaderboard.15m"
+  channel: "grid.leaderboard.15m"
+  redis_maxlen: 1000
+
+grid:
+  experiment_id: "twap_v5_20260905"
+  starting_capital: 1000.0
+  order_size_pct: 0.05
+  friction_pct: 0.0  # Market fees are explicit; no extra synthetic friction.
+  max_entry_price: 0.95
+  no_trade_first_seconds: 300
+  no_trade_last_seconds: 180
+  paper_recheck_delay_seconds: 1.0
+  paper_delayed_book_slippage: 0.02
+  # Hold a staged grid entry this many wall-clock seconds before committing the
+  # paper fill, then drop it if the CLOB taker-health flag went unhealthy in the
+  # interim. Lets the live trader's real POST discover a 425 / post-only outage
+  # first, so the grid never records an entry live could not place. 0 = instant
+  # commit (legacy). See "CLOB taker-health gate" in CLAUDE.md.
+  grid_entry_confirm_seconds: 4.0
+  settlement_wait_seconds: 20
+  liquidity_mode: "independent"
+  capacity_seed: 17
+  hybrid_calibration_enabled: true
+  hybrid_remote_inbox_enabled: true
+  hybrid_local_worker_enabled: false
+  hybrid_inbox_dir: "results/calibration_inbox_grid"
+  # Legacy terminal-price re-evaluation only. Current TWAP events use v5
+  # producer scalars and the two-second pricing/source-age entry guards.
+  local_prob_eval_enabled: true
+  local_eval_event_max_age_s: 30.0
+  local_eval_spot_max_age_s: 2.0
+  staged_finalize_fresh_prob: true
+  ipc_backend: "redis"
+  redis_url: "redis://redis:6379/0"
+  redis_stream: "market.calibration"
+  redis_consumer_group: "grid"
+  redis_consumer_name: "grid"
+  ipc_file_fallback_enabled: true
+  mirror_signal_publish_enabled: true
+  mirror_signal_instance_id: "auto_from_live"
+  mirror_signal_stream: "trade.mirror.signals"
+  mirror_heartbeat_key: "trade.mirror.heartbeat"
+  mirror_heartbeat_ttl_seconds: 120
+  # CLOB taker-health gate: skip dry-run entries while the live trader's shared
+  # flag marks a taker outage, so the leaderboard reflects live-achievable fills.
+  clob_health_gate_enabled: true
+  clob_health_shared_path: "results/15m_clob_health.json"
+  # Canonical availability ledger (availability.py). Optional SECOND forward gate
+  # that consults the normalized interval ledger written by the live trader.
+  # Enabled here for confirmed ledger intervals; missing ledger data is fail-open.
+  availability_gate_enabled: true
+  availability_gate_min_confidence: "confirmed"
+  availability_ledger_path: "results/availability_ledger.csv"
+  # Near-real-time auto-amend (WS6): void the mirror instance's just-committed
+  # phantom entry when the live trader's rejection ack shows it could not place
+  # the order. Enabled here; the offline cleaner remains available for review.
+  grid_auto_amend_enabled: true
+  mirror_ack_stream: "trade.mirror.acks"
+  append_stop_loss_pct: [0.40]
+  grid:
+    alpha_up: [1.0, 1.3, 1.8, 2.5]
+    alpha_down: [1.0, 1.3, 1.8, 2.5]
+    floor_up: [0.45, 0.55, 0.65]
+    floor_down: [0.45, 0.55, 0.65]
+    tp_percentage: [0.08, 0.15, 0.30]
+    stop_loss_pct: [0.0, 0.20]
+
+live:
+  paper_mode: false
+  live_trading_enabled: true
+  edge_alpha_up: 2.50
+  edge_alpha_down: 2.50
+  edge_floor_up: 0.45
+  edge_floor_down: 0.45
+  tp_percentage: 0.30
+  max_entry_price: 0.95
+  friction_pct: 0.0
+  trail_activation: 0.0
+  trail_distance: 0.0
+  stop_loss_pct: 0.40
+  signature_type: 1
+  max_slippage_pct: 0.02
+  require_confirmation: false
+  starting_capital: 1000.0
+  paper_starting_capital: 1000.0
+  order_size_pct: 0.06
+  min_order_size_usd: 5.75
+  min_position_shares: 5.75
+  no_trade_first_seconds: 300
+  no_trade_last_seconds: 180
+  live_recheck_delay_seconds: 1.0
+  live_entry_spot_recheck_enabled: true
+  live_entry_spot_recheck_buffer_usd: 5.0
+  live_entry_order_retries: 5
+  # Retry window aligned to the 30s mirror-signal TTL (was 60s): a doomed retry
+  # storm past the signal's validity only blocked the event loop. Faster 5s
+  # cadence fits more good-faith attempts inside the valid window for transient
+  # blips, while the CLOB taker-health flag fast-fails genuine outages.
+  live_entry_retry_window_seconds: 30.0
+  live_entry_retry_delay_seconds: 5.0
+  live_entry_retry_price_guard: 0.02
+  # CLOB taker-health gate (writes the shared flag on real order rejections;
+  # reads it + the read-only clob_reads probe before each entry).
+  clob_health_gate_enabled: true
+  clob_health_shared_path: "results/15m_clob_health.json"
+  clob_health_default_cooldown_seconds: 90.0
+  clob_health_max_cooldown_seconds: 120.0
+  clob_reads_probe_ttl_seconds: 8.0
+  # Canonical availability ledger (availability.py). The live trader appends
+  # scoped evidence and rebuilds the interval ledger that the offline cleaner and
+  # the 5m bot consume. Writing is best-effort and never blocks the order path.
+  # shared_availability_ledger_path (when set) gets platform-scope evidence only,
+  # for cross-bot reuse by the dry-run-only 5m bot. availability_gate_enabled
+  # enables the ledger-driven entry gate below (fail-open on missing data).
+  availability_ledger_enabled: true
+  availability_gate_enabled: true
+  availability_gate_min_confidence: "confirmed"
+  availability_coalesce_gap_seconds: 120.0
+  availability_ledger_path: "results/availability_ledger.csv"
+  availability_events_path: "results/availability_events.csv"
+  shared_availability_ledger_path: "results/shared_availability_ledger.csv"
+  tp_fill_balance_recheck_seconds: 2.0
+  post_cancel_reconcile_seconds: 3.0
+  post_cancel_reconcile_poll_seconds: 0.5
+  post_cancel_ambiguous_on_unreadable_balance: true
+  grace_period_seconds: 60
+  check_interval_seconds: 10
+  reconciliation_enabled: true
+  reconciliation_interval_seconds: 300
+  history_reconcile_interval_seconds: 60.0
+  hybrid_calibration_enabled: true
+  hybrid_remote_inbox_enabled: true
+  hybrid_local_worker_enabled: false
+  hybrid_local_worker_delay_min_seconds: 0.0
+  hybrid_local_worker_delay_max_seconds: 0.0
+  hybrid_inbox_dir: "results/calibration_inbox_live"
+  # Match the grid's legacy evaluation flags. Current TWAP entries use
+  # timestamped v5 scalars; independent loops still require freshness checks.
+  local_prob_eval_enabled: true
+  local_eval_event_max_age_s: 30.0
+  local_eval_spot_max_age_s: 2.0
+  staged_finalize_fresh_prob: true
+  ipc_backend: "redis"
+  redis_url: "redis://redis:6379/0"
+  redis_stream: "market.calibration"
+  redis_consumer_group: "live"
+  redis_consumer_name: "live"
+  redis_lock_enabled: true
+  redis_lock_key: "locks:polymarket_updown_15m:live"
+  redis_lock_ttl_ms: 45000
+  redis_lock_renew_ms: 15000
+  redis_lock_fail_closed: true
+  ipc_file_fallback_enabled: true
+  mirror_signal_control_enabled: true
+  mirror_instance_id: "auto"
+  mirror_controls_entry: true
+  mirror_controls_stop_loss: true
+  allow_local_entry_with_mirror: false
+  local_entry_enabled: false
+  local_stop_loss_enabled: false
+  tp_limit_order_enabled: true
+  dry_tp_signal_action: "immediate_market_exit"
+  dry_tp_live_fill_grace_seconds: 0
+  dry_tp_market_exit_enabled: true
+  dry_tp_market_exit_skip_if_expired: true
+  mirror_signal_stream: "trade.mirror.signals"
+  mirror_ack_stream: "trade.mirror.acks"
+  mirror_ack_stream_maxlen: 100000
+  mirror_signal_max_age_seconds: 30
+  mirror_signal_async_enabled: true
+  mirror_signal_async_block_ms: 50
+  mirror_signal_entry_max_consumption_age_seconds: 15
+  mirror_signal_entry_tick_max_age_seconds: 5
+  mirror_signal_entry_retry_delay_seconds: 0.5
+  mirror_signal_latency_warn_seconds: 1.0
+  mirror_signal_ack_duplicate_throttle_seconds: 30.0
+  mirror_signal_lock_warn_seconds: 1.0
+  mirror_signal_pending_reclaim_min_idle_ms: 1000
+  mirror_signal_pending_recover_interval_seconds: 1.0
+  mirror_heartbeat_key: "trade.mirror.heartbeat"
+  mirror_heartbeat_stale_seconds: 60.0
+  mirror_heartbeat_check_interval_seconds: 10.0
+  polygon_rpc_urls:
+    - "https://polygon-bor-rpc.publicnode.com"
+    - "https://polygon-rpc.com"
+  persistence_backend: "sqlite"
+  export_legacy_files: true
+  sqlite_db_file: "results/db/15m_paper.sqlite"
+  live_sqlite_db_file: "results/db/15m_live.sqlite"
+  log_orderbook: true
+  mirror_signal_audit_file: "results/15m_mirror_signal_audit.csv"
+  mirror_signal_audit_current_file: "results/15m_mirror_signal_audit.current.csv"

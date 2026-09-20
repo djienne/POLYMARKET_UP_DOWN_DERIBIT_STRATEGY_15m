@@ -1,0 +1,41 @@
+services:
+  offload:
+    profiles: ["local-offload"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_offload
+    command: ["python", "-u", "scripts/local_calibration_offload.py"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      VPS_HOST: ${VPS_HOST}
+      VPS_USER: ${VPS_USER}
+      VPS_DIR: ${VPS_DIR}
+      SSH_KEY: /app/keys/offload.pem
+    network_mode: bridge
+    cpus: 1.0
+    mem_limit: 1g
+    memswap_limit: 1g
+    mem_reservation: 256m
+    pids_limit: 2048
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ${OFFLOAD_SSH_KEY_HOST_PATH:-./results/.offload_ssh_key}:/app/keys/offload.pem:ro

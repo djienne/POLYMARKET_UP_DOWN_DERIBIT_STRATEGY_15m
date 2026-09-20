@@ -1,0 +1,49 @@
+# Sensitive
+BTC_pricer_15m/.env
+POLYMARKET_STREAMING_DASHBOARD_15m/.env
+
+# Large / regenerable
+musics/
+musics_faded_256kbps/
+music_wav/
+thumbnail/
+*.zip
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+BTC_pricer_15m/results/
+POLYMARKET_STREAMING_DASHBOARD_15m/frontend/node_modules/
+POLYMARKET_STREAMING_DASHBOARD_15m/frontend/dist/
+POLYMARKET_STREAMING_DASHBOARD_15m/logs/
+POLYMARKET_STREAMING_DASHBOARD_15m/runtime/
+POLYMARKET_STREAMING_DASHBOARD_15m/.codex_tmp/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude metadata
+.claude/
+
+# Migration artifacts
+MIGRATION_MANIFEST.json
+MIGRATION_README.txt
+
+# Images (dashboard screenshots, not source)
+POLYMARKET_STREAMING_DASHBOARD_15m/*.png
+POLYMARKET_STREAMING_DASHBOARD_15m/*.jpg
+POLYMARKET_STREAMING_DASHBOARD_15m/*.gif
+
+# Secrets — the real .env must never be committed.
+.env
+.env.*
+
+# ...but the placeholder template must stay tracked.
+!.env.example
+
+# Private migration inventory and machine profiling output
+MIGRATION_ARCHIVE_MANIFEST.json
+monitoring/mem_samples.csv

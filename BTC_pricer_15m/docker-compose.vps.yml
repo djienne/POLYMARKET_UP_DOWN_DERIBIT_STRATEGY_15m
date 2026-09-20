@@ -1,0 +1,139 @@
+# VPS-only compose for the live real-money trader.
+# The 864-instance paper grid does not run here (2-vCPU box would be crushed);
+# it stays local. Used exclusively by `python manage.py live vps`.
+#
+# Invoke on the VPS as:
+#   docker compose -f docker-compose.vps.yml up -d live
+#   docker compose -f docker-compose.vps.yml logs -f live
+#   docker compose -f docker-compose.vps.yml stop live
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: btc_pricer_15m_redis
+    # Persistence DISABLED on purpose -- see the long note in docker-compose.yml.
+    # This redis is a pure IPC transport (MAXLEN-bounded streams that calc
+    # republishes seconds after a restart); nothing reads persisted history.
+    # With appendonly on, an unclean death garbled the incr AOF, redis refused
+    # to start ("Bad file format reading the append only file") and crash-looped
+    # 166 times over ~3 hours, taking grid + live down with it. Do not re-enable
+    # without `--aof-load-truncated yes` AND a startup repair step.
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    restart: unless-stopped
+    # Sized for the 2-vCPU VPS, not the local box: only `live` + `spot` connect
+    # here (no 864-instance grid), so the stream volume is a fraction of local.
+    # 0.25 core is plenty for a single-threaded IPC transport, and 384m leaves
+    # ~3x headroom over the working set that load implies. Both are hard caps so
+    # redis can never crowd out the real-money trader on a 2-core box.
+    cpus: 0.25
+    mem_limit: 384m
+    memswap_limit: 384m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - btc_pricer_15m_vps_redis_data:/data
+
+  spot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_spot
+    command: ["python", "-u", "-m", "scripts.trader.spot_daemon", "--config", "config.yaml", "-v"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    mem_reservation: 128m
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"from pathlib import Path; import time, sys; p=Path('results/spot_daemon.health'); sys.exit(0 if p.exists() and time.time()-p.stat().st_mtime<30 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    volumes:
+      - ./results:/app/results
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+  live:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc_pricer_15m_live
+    command:
+      [
+        "python",
+        "-u",
+        "-m",
+        "scripts.trader.main",
+        "--mode",
+        "trader",
+        "--live-only",
+        "-v",
+      ]
+    init: true
+    env_file:
+      - .env
+    environment:
+      BTC_SPOT_REDIS_URL: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      spot:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    cpus: 1.0
+    mem_limit: 1g
+    memswap_limit: 1g
+    mem_reservation: 256m
+    pids_limit: 2048
+    restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./results:/app/results
+      - ./config_trader_live.json:/app/config_trader_live.json:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+
+volumes:
+  btc_pricer_15m_vps_redis_data:

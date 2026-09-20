@@ -1,0 +1,35 @@
+{
+  "spot_price": 69445.11,
+  "target_price": 70850.63,
+  "direction": "up",
+  "ttm_days": 0.046212380184804926,
+  "heston": {
+    "prob_above": 0.7643088932395444,
+    "prob_below": 0.23078440414014692,
+    "r_squared": 0.9981802084780048,
+    "params": {
+      "v0": 2.7323148184441597,
+      "kappa": 8.003946662460597,
+      "theta": 0.02194104043089836,
+      "xi": 4.818949496232486,
+      "rho": -0.28787174832987306,
+      "ttm": 0.00012660926078028747,
+      "feller_satisfied": false,
+      "feller_ratio": 0.015124695837977977
+    }
+  },
+  "preferred_model": "heston",
+  "timestamp": "2026-03-26T15:00:23.498074+00:00",
+  "timing": {
+    "calibration_s": 418.0004093647003,
+    "surface_fit_s": null,
+    "mc_s": null,
+    "bl_s": 0.7146296501159668,
+    "surface_bl_s": null
+  },
+  "bl_prob_above": 0.7643088932395444,
+  "bl_prob_below": 0.23078440414014692,
+  "avg_prob_above": 0.7643088932395444,
+  "avg_prob_below": 0.23078440414014692,
+  "bl_mc_divergence": null
+}

@@ -1,0 +1,17 @@
+# Legacy/native development dependencies. Docker verification uses
+# requirements-docker.txt; see ../OPERATIONS.md.
+numpy
+scipy
+numba
+requests
+PyYAML
+pandas
+matplotlib
+pytest
+pytest-asyncio
+QuantLib  # Optional: for improved numerical precision in option pricing
+python-dotenv
+python-dateutil
+py-clob-client-v2==1.0.0
+web3
+redis

@@ -1,0 +1,28 @@
+{
+    "starting_capital": 1000.0,
+    "order_size_pct": 0.05,
+    "friction_pct": 0.015,
+    "max_entry_price": 0.95,
+    "no_trade_first_seconds": 300,
+    "no_trade_last_seconds": 180,
+    "paper_recheck_delay_seconds": 1.0,
+    "settlement_wait_seconds": 20,
+    "liquidity_mode": "independent",
+    "capacity_seed": 17,
+    "append_stop_loss_pct": [0.40],
+
+    "_calibration_note": "Grid delegates calibration to the shared calc daemon (btc_pricer_15m_calc). Disable hybrid_calibration_enabled to fall back to in-process calibration.",
+    "hybrid_calibration_enabled": true,
+    "hybrid_remote_inbox_enabled": true,
+    "hybrid_local_worker_enabled": false,
+    "hybrid_inbox_dir": "results/calibration_inbox_grid",
+
+    "grid": {
+        "alpha_up":      [1.0, 1.3, 1.8, 2.5],
+        "alpha_down":    [1.0, 1.3, 1.8, 2.5],
+        "floor_up":      [0.45, 0.55, 0.65],
+        "floor_down":    [0.45, 0.55, 0.65],
+        "tp_percentage": [0.08, 0.15, 0.30],
+        "stop_loss_pct": [0.0, 0.20]
+    }
+}

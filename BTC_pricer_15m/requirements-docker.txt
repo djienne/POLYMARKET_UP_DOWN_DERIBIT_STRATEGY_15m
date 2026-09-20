@@ -1,0 +1,21 @@
+# Pinned to the versions running in the production image as of 2026-06-09
+# (captured via `docker compose exec -T grid pip freeze`; full freeze in
+# requirements-docker.lock.txt). Numerical results depend on these — bump
+# deliberately, never implicitly via a rebuild.
+numpy==2.4.6
+scipy==1.17.1
+numba==0.65.1
+llvmlite==0.47.0
+requests==2.34.2
+PyYAML==6.0.3
+pandas==3.0.3
+matplotlib==3.10.9
+python-dotenv==1.2.2
+python-dateutil==2.9.0.post0
+py-clob-client-v2==1.0.0
+web3==7.16.0
+redis==8.0.0
+QuantLib==1.42.1
+pytest==9.0.3
+pytest-asyncio==1.4.0
+pyflakes==3.4.0

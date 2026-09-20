@@ -1,0 +1,41 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# local debug artifacts
+debug.png
+Untitled.png
+*.zip
+
+# local generated artifacts
+.codex_tmp/
+.patchgen_*/
+BTC_pricer_15m_*_work_*/
+ps_patch/
+obs/
+results/
+runtime/
+logs/
+*.patch
+.codex_commit_index_*
+title_description.txt
+*_pytest_runner*/
+*_pytest_base/
+python_write_test/
+python_mkdir_700/
+
+# ad-hoc local media; tracked assets are unaffected
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Private keys and host-specific material. Must never leak.
+*.pem

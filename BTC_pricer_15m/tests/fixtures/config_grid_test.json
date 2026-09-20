@@ -1,0 +1,11 @@
+{
+  "starting_capital": 500.0,
+  "grid": {
+    "alpha_up": [1.0, 2.0],
+    "alpha_down": [1.0],
+    "floor_up": [0.5],
+    "floor_down": [0.5],
+    "tp_percentage": [0.1, 0.2],
+    "stop_loss_pct": [0.0]
+  }
+}
