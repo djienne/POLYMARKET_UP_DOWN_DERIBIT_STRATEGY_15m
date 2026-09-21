@@ -74,7 +74,7 @@ INCLUDE_FILES = [
     ".gitignore",
     "AGENTS.md",
     "CLAUDE.md",
-    "NEW_MACHINE_SETUP.md",
+    "README.md",
     "OPERATIONS.md",
     "archive_deploy.py",
     "manage.py",
@@ -381,7 +381,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     print("3. Check/refresh Polymarket API credentials:")
     print(f"   Edit: {target / 'BTC_pricer_15m' / '.env'}")
     print("   If API keys are stale, derive fresh ones:")
-    print("   See NEW_MACHINE_SETUP.md Step 1")
+    print("   See README.md: Getting started")
     print()
     print("4. Start or restart all local Docker services, including live:")
     print(f"   cd {target}")
