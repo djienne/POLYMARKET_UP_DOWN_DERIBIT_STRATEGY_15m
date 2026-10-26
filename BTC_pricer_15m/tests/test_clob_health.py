@@ -197,7 +197,7 @@ def test_reads_healthy_when_accepting(monkeypatch) -> None:
             return _Resp(_gamma_market(), status_code=200)
         return _Resp(_book_with_mid(), status_code=200)
 
-    monkeypatch.setattr(polymarket_status.requests, "get", fake_get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", fake_get)
     healthy, label = polymarket_status.clob_reads_healthy(ttl=0.0)
     assert healthy is True
     assert label is None
@@ -211,7 +211,7 @@ def test_reads_block_when_not_accepting(monkeypatch) -> None:
             return _Resp(_gamma_market(accepting=False), status_code=200)
         return _Resp(_book_with_mid(), status_code=200)
 
-    monkeypatch.setattr(polymarket_status.requests, "get", fake_get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", fake_get)
     healthy, label = polymarket_status.clob_reads_healthy(ttl=0.0)
     assert healthy is False
     assert label == "market not accepting orders"
@@ -219,7 +219,7 @@ def test_reads_block_when_not_accepting(monkeypatch) -> None:
 
 def test_reads_block_when_ok_endpoint_not_ready(monkeypatch) -> None:
     monkeypatch.setattr(
-        polymarket_status.requests, "get",
+        polymarket_status._SESSION, "get",
         lambda url, **kwargs: _Resp(None, status_code=425),
     )
     healthy, label = polymarket_status.clob_reads_healthy(ttl=0.0)
@@ -232,7 +232,7 @@ def test_reads_fail_open_on_transport_error(monkeypatch) -> None:
     def boom(url, **kwargs):
         raise polymarket_status.requests.RequestException("network down")
 
-    monkeypatch.setattr(polymarket_status.requests, "get", boom)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", boom)
     healthy, _label = polymarket_status.clob_reads_healthy(ttl=0.0)
     assert healthy is True
 

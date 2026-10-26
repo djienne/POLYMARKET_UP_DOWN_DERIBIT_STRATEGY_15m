@@ -180,22 +180,6 @@ class Hub:
             return int(settings.default_instance_id)
         return int(instance_id)
 
-    def _live_trader_active(self) -> bool:
-        from ..collector.liveness import current_liveness
-
-        info = current_liveness()
-        if info.execution_location == "local" and info.bot_live:
-            return True
-        live_lock = settings.resolved_results_dir / "single_trader.lock"
-        if live_lock.exists():
-            try:
-                age = time.time() - live_lock.stat().st_mtime
-                if age < 120:
-                    return True
-            except OSError:
-                pass
-        return False
-
     @property
     def effective_mode(self) -> str:
         """Return the configured dashboard mode.

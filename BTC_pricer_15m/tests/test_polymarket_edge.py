@@ -256,3 +256,30 @@ def test_terminal_calibration_worker_does_not_overwrite_warm_start_on_failure(mo
 
     assert worker._last_surface_params is previous
     assert calls["warm_start_surface_params"] is previous
+
+
+@pytest.mark.parametrize(
+    ("error", "client_kept"),
+    [
+        (ValueError("TWAP spot refresh failed: fresh_spot_timeout"), True),
+        ("deribit", False),
+    ],
+)
+def test_worker_resets_deribit_client_only_on_transport_errors(monkeypatch, tmp_path, error, client_kept):
+    from btc_pricer.api.deribit import DeribitAPIError
+
+    if error == "deribit":
+        error = DeribitAPIError("GET get_index_price failed after 3 attempt(s)")
+
+    def fake_run_terminal(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr("btc_pricer.cli.common.load_config", lambda *args, **kwargs: SimpleNamespace(api=None, validation=None))
+    monkeypatch.setattr("btc_pricer.api.deribit.DeribitClient", lambda *args, **kwargs: object())
+    monkeypatch.setattr("cli_terminal.run_terminal", fake_run_terminal)
+
+    worker = polymarket_edge.TerminalCalibrationWorker(config_path=tmp_path / "config.yaml")
+    with pytest.raises(type(error)):
+        worker.run(barrier=100000.0, hours=1.0, json_file=tmp_path / "terminal.json")
+
+    assert (worker._client is not None) is client_kept

@@ -31,7 +31,7 @@ def test_trader_polymarket_status_fails_closed_on_cold_fetch_failure(monkeypatch
     def _raise(*args, **kwargs):
         raise polymarket_status.requests.RequestException("simulated status outage")
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _raise)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _raise)
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is False
     assert polymarket_status.polymarket_status_label() == polymarket_status.FETCH_FAILED_STATUS_LABEL
@@ -49,7 +49,7 @@ def test_trader_polymarket_status_fails_closed_on_cold_malformed_payload(
     monkeypatch,
     payload: object,
 ) -> None:
-    monkeypatch.setattr(polymarket_status.requests, "get", lambda *args, **kwargs: _Resp(payload))
+    monkeypatch.setattr(polymarket_status._SESSION, "get", lambda *args, **kwargs: _Resp(payload))
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is False
     assert polymarket_status.polymarket_status_label() == polymarket_status.FETCH_FAILED_STATUS_LABEL
@@ -57,7 +57,7 @@ def test_trader_polymarket_status_fails_closed_on_cold_malformed_payload(
 
 def test_trader_polymarket_status_preserves_confirmed_up_on_later_fetch_failure(monkeypatch) -> None:
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({"page": {"status": "UP"}, "activeMaintenances": []}),
     )
@@ -67,7 +67,7 @@ def test_trader_polymarket_status_preserves_confirmed_up_on_later_fetch_failure(
     def _raise(*args, **kwargs):
         raise polymarket_status.requests.RequestException("simulated status outage")
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _raise)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _raise)
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is True
     assert polymarket_status.polymarket_status_label() is None
@@ -75,14 +75,14 @@ def test_trader_polymarket_status_preserves_confirmed_up_on_later_fetch_failure(
 
 def test_trader_polymarket_status_preserves_confirmed_up_on_later_malformed_payload(monkeypatch) -> None:
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({"page": {"status": "UP"}, "activeMaintenances": []}),
     )
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is True
     assert polymarket_status.polymarket_status_label() is None
 
-    monkeypatch.setattr(polymarket_status.requests, "get", lambda *args, **kwargs: _Resp({}))
+    monkeypatch.setattr(polymarket_status._SESSION, "get", lambda *args, **kwargs: _Resp({}))
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is True
     assert polymarket_status.polymarket_status_label() is None
@@ -90,7 +90,7 @@ def test_trader_polymarket_status_preserves_confirmed_up_on_later_malformed_payl
 
 def test_trader_polymarket_status_preserves_confirmed_down_on_later_fetch_failure(monkeypatch) -> None:
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UNDERMAINTENANCE"},
@@ -108,7 +108,7 @@ def test_trader_polymarket_status_preserves_confirmed_down_on_later_fetch_failur
     def _raise(*args, **kwargs):
         raise polymarket_status.requests.RequestException("simulated status outage")
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _raise)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _raise)
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is False
     assert polymarket_status.polymarket_status_label() == "UNDERMAINTENANCE"
@@ -116,7 +116,7 @@ def test_trader_polymarket_status_preserves_confirmed_down_on_later_fetch_failur
 
 def test_trader_polymarket_status_preserves_confirmed_down_on_later_malformed_payload(monkeypatch) -> None:
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UNDERMAINTENANCE"},
@@ -131,7 +131,7 @@ def test_trader_polymarket_status_preserves_confirmed_down_on_later_malformed_pa
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is False
     assert polymarket_status.polymarket_status_label() == "UNDERMAINTENANCE"
 
-    monkeypatch.setattr(polymarket_status.requests, "get", lambda *args, **kwargs: _Resp({}))
+    monkeypatch.setattr(polymarket_status._SESSION, "get", lambda *args, **kwargs: _Resp({}))
 
     assert polymarket_status.is_polymarket_operational(force_refresh=True) is False
     assert polymarket_status.polymarket_status_label() == "UNDERMAINTENANCE"
@@ -142,7 +142,7 @@ def test_trader_polymarket_status_requires_page_up(monkeypatch, page_status: str
     monkeypatch.setattr(polymarket_status, "_cached_at", 0.0)
     monkeypatch.setattr(polymarket_status, "_consecutive_empirical_ok", 0)
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({"page": {"status": page_status}, "activeMaintenances": []}),
     )
@@ -161,7 +161,7 @@ def test_trader_polymarket_status_blocks_active_maintenance(monkeypatch) -> None
     monkeypatch.setattr(polymarket_status, "_cached_at", 0.0)
     monkeypatch.setattr(polymarket_status, "_consecutive_empirical_ok", 0)
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UP"},
@@ -184,7 +184,7 @@ def test_trader_polymarket_status_allows_clob_maintenance_after_empirical_health
             return _Resp({"components": [{"name": "CLOB API", "status": "UNDERMAINTENANCE"}]})
         return _Resp({"page": {"status": "UNDERMAINTENANCE"}, "activeMaintenances": []})
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _get)
     monkeypatch.setattr(
         polymarket_status,
         "_empirical_clob_health",
@@ -207,7 +207,7 @@ def test_trader_polymarket_status_blocks_clob_maintenance_when_health_fails(
             return _Resp({"components": [{"name": "CLOB API", "status": "UNDERMAINTENANCE"}]})
         return _Resp({"page": {"status": "UNDERMAINTENANCE"}, "activeMaintenances": []})
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _get)
     monkeypatch.setattr(
         polymarket_status,
         "_empirical_clob_health",
@@ -222,7 +222,7 @@ def test_trader_polymarket_status_ignores_future_scheduled_maintenance(monkeypat
     monkeypatch.setattr(polymarket_status, "_cached_at", 0.0)
     monkeypatch.setattr(polymarket_status, "_consecutive_empirical_ok", 0)
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UP"},
@@ -244,7 +244,7 @@ def test_trader_polymarket_status_ignores_unknown_future_maintenance(monkeypatch
     monkeypatch.setattr(polymarket_status, "_cached_at", 0.0)
     monkeypatch.setattr(polymarket_status, "_consecutive_empirical_ok", 0)
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UP"},
@@ -266,7 +266,7 @@ def test_trader_polymarket_status_blocks_unknown_undated_maintenance(monkeypatch
     monkeypatch.setattr(polymarket_status, "_cached_at", 0.0)
     monkeypatch.setattr(polymarket_status, "_consecutive_empirical_ok", 0)
     monkeypatch.setattr(
-        polymarket_status.requests,
+        polymarket_status._SESSION,
         "get",
         lambda *args, **kwargs: _Resp({
             "page": {"status": "UP"},
@@ -288,7 +288,7 @@ def test_trader_polymarket_status_page_incident_overridden_by_empirical_health(m
             return _Resp({"components": [{"name": "CLOB API", "status": "OPERATIONAL"}]})
         return _Resp({"page": {"status": "HASISSUES"}, "activeMaintenances": []})
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _get)
     monkeypatch.setattr(
         polymarket_status,
         "_empirical_clob_health",
@@ -310,7 +310,7 @@ def test_trader_polymarket_status_page_incident_with_clob_down_never_overridden(
             return _Resp({"components": [{"name": "CLOB API", "status": "DEGRADEDPERFORMANCE"}]})
         return _Resp({"page": {"status": "HASISSUES"}, "activeMaintenances": []})
 
-    monkeypatch.setattr(polymarket_status.requests, "get", _get)
+    monkeypatch.setattr(polymarket_status._SESSION, "get", _get)
     monkeypatch.setattr(
         polymarket_status,
         "_empirical_clob_health",

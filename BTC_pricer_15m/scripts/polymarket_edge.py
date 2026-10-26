@@ -123,10 +123,14 @@ class TerminalCalibrationWorker:
                         cached_surface_result=cached_surface_result,
                         spot_provider=spot_provider,
                     )
-            except Exception:
-                # A broken requests session should not poison later in-process
-                # attempts. The caller may still fall back to subprocess.
-                self._reset_client()
+            except Exception as exc:
+                # Drop the session only on a Deribit failure; spot-freshness skips
+                # (most cycles) keep the warm connection. The caller may still
+                # fall back to subprocess.
+                from btc_pricer.api.deribit import DeribitAPIError
+
+                if isinstance(exc, DeribitAPIError):
+                    self._reset_client()
                 raise
 
             output = stdout.getvalue()

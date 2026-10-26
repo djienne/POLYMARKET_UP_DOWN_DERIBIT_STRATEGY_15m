@@ -27,12 +27,18 @@ import requests
 
 log = logging.getLogger(__name__)
 
+# One keep-alive Session for every probe (urllib3's pool is thread-safe for the
+# refresher's plain GETs); bare requests.get paid DNS+TCP+TLS per call.
+_SESSION = requests.Session()
+
 STATUS_URL = "https://status.polymarket.com/summary.json"
 COMPONENTS_URL = "https://status.polymarket.com/v3/components.json"
 GAMMA_MARKETS_URL = "https://gamma-api.polymarket.com/markets"
 CLOB_BOOK_URL = "https://clob.polymarket.com/book"
 CLOB_OK_URL = "https://clob.polymarket.com/ok"
-CACHE_TTL_SECONDS = 60.0
+# 300 s, not 60: status.polymarket.com rate-limits per IP, and this host's six
+# status pollers (3 trader stacks + 3 dashboards) drew ~50% HTTP 429 at 60 s.
+CACHE_TTL_SECONDS = 300.0
 CLOB_READS_TTL_SECONDS = 8.0
 REQUEST_TIMEOUT_SECONDS = 5.0
 EMPIRICAL_CLOB_OK_POLLS = 2
@@ -184,7 +190,7 @@ def _extract_tokens(market: dict) -> tuple[Optional[str], Optional[str]]:
 def _empirical_clob_health() -> ClobHealth:
     slug = _current_15m_slug()
     try:
-        r = requests.get(
+        r = _SESSION.get(
             GAMMA_MARKETS_URL,
             params={"slug": slug},
             timeout=REQUEST_TIMEOUT_SECONDS,
@@ -217,7 +223,7 @@ def _empirical_clob_health() -> ClobHealth:
     books: list[dict] = []
     for token in (up_token, down_token):
         try:
-            br = requests.get(
+            br = _SESSION.get(
                 CLOB_BOOK_URL,
                 params={"token_id": token},
                 timeout=REQUEST_TIMEOUT_SECONDS,
@@ -253,7 +259,7 @@ def _refresh() -> None:
     global _cached_is_up, _cached_at, _cached_label, _consecutive_failures
     global _consecutive_empirical_ok, _has_successful_refresh, _last_empirical_slug
     try:
-        r = requests.get(
+        r = _SESSION.get(
             STATUS_URL,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={"User-Agent": "btc-pricer-trader/0.1"},
@@ -282,7 +288,7 @@ def _refresh() -> None:
 
     components_data: Optional[dict] = None
     try:
-        cr = requests.get(
+        cr = _SESSION.get(
             COMPONENTS_URL,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={"User-Agent": "btc-pricer-trader/0.1"},
@@ -406,7 +412,7 @@ def _probe_clob_ok() -> Optional[bool]:
     """GET /ok. False = server affirmatively not ready (425/503/5xx);
     True = reachable; None = probe transport failure (do not block on this)."""
     try:
-        r = requests.get(
+        r = _SESSION.get(
             CLOB_OK_URL,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={"User-Agent": "btc-pricer-trader/0.1"},

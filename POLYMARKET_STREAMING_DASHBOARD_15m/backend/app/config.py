@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     polymarket_request_timeout_seconds: float = 6.0
     # Statuspage state changes slowly; live CLOB/Gamma health is checked by the
     # market poller, so this can stay gentle without weakening the gate.
-    polymarket_status_poll_interval_seconds: float = 60.0
+    # status.polymarket.com rate-limits per IP; 60 s across six pollers drew ~50% HTTP 429.
+    polymarket_status_poll_interval_seconds: float = 300.0
 
     # Local Docker only: latency is measured from the dashboard host / local
     # trader side. Remote execution settings were intentionally removed.

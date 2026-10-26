@@ -249,6 +249,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    # -v is for this daemon's lines; websockets' DEBUG dumped every frame
+    # (~75/s), rolling Docker's 100 MB log cap every ~35 min.
+    logging.getLogger("websockets").setLevel(logging.INFO)
     config = SpotDaemonConfig.from_file(args.config)
     daemon = SpotDaemon(config)
 
