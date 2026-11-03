@@ -5,7 +5,7 @@ the wallet-truth +$1.84.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from decimal import Decimal
@@ -245,6 +245,23 @@ def test_history_reconciler_skips_already_final_rows(tmp_path):
     assert upgraded == 0
     assert seeded.proceeds_source == "polymarket_history"
     assert seeded.proceeds != pytest.approx(99.99)  # unchanged
+
+
+def test_history_reconciler_ignores_stale_tentative_rows(tmp_path):
+    """A row /data/trades never indexed must not be re-queried forever:
+    each miss costs a 14 s backoff inside the live tick loop."""
+    executor = _StubLiveExec(proceeds_to_return=8.79)
+    trader = _trader(tmp_path, executor)
+    seeded = _seed_csv_with_tentative_row(trader)
+    seeded.closed_at = datetime.now(timezone.utc) - timedelta(days=3)
+
+    from scripts.trader.polymarket_history_reconciler import (
+        reconcile_pending_proceeds,
+    )
+
+    assert reconcile_pending_proceeds(trader) == 0
+    assert executor.proceeds_calls == []
+    assert seeded.proceeds_source == "order_status"
 
 
 class _ReceiptExec(_StubLiveExec):

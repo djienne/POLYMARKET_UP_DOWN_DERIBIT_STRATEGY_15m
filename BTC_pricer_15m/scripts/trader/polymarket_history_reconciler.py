@@ -7,6 +7,7 @@ anchors current cash so accounting corrections do not charge fees twice.
 from __future__ import annotations
 
 import math
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional
 
 from .position import Trade
@@ -17,6 +18,11 @@ if TYPE_CHECKING:
 
 # Sources whose proceeds value is tentative and worth re-querying.
 TENTATIVE_SOURCES = frozenset({"order_status", "planned"})
+
+# Polymarket indexes fills within minutes; a row still unmatched after a day
+# never will be, and each miss costs a 14 s backoff inside the live tick loop.
+# Older tentative rows keep their order_status value (fix by hand with void_phantom).
+MAX_RECONCILE_AGE = timedelta(days=1)
 
 # Sources that are already authoritative — never overwrite.
 FINAL_SOURCES = frozenset({"on-chain", "polymarket_history", "resolution", "v2_receipt"})
@@ -150,8 +156,9 @@ def reconcile_pending_proceeds(
 
     closed = list(trader.state.closed_positions[-lookback:])
     upgraded = 0
+    now = datetime.now(timezone.utc)
     for trade in closed:
-        if not _is_tentative(trade):
+        if not _is_tentative(trade) or now - trade.closed_at > MAX_RECONCILE_AGE:
             continue
         # Skip rows without an exit_order_id — we can't disambiguate
         # which on-chain trades belong to this position. The void_phantom
