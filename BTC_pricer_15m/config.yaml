@@ -162,7 +162,7 @@ calc:
   market_scan_interval_seconds: 30.0
   polygon_rpc_urls:
     - "https://polygon-bor-rpc.publicnode.com"
-    - "https://polygon-rpc.com"
+    - "https://polygon.drpc.org"
   ipc_backend: "redis"
   redis_url: "redis://redis:6379/0"
   redis_stream: "market.calibration"
@@ -384,7 +384,7 @@ live:
   mirror_heartbeat_check_interval_seconds: 10.0
   polygon_rpc_urls:
     - "https://polygon-bor-rpc.publicnode.com"
-    - "https://polygon-rpc.com"
+    - "https://polygon.drpc.org"
   persistence_backend: "sqlite"
   export_legacy_files: true
   sqlite_db_file: "results/db/15m_paper.sqlite"

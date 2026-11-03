@@ -1852,13 +1852,15 @@ class LiveExecutor(Executor):
             if not self._funder:
                 error_msgs.append("Data API: no funder address")
             else:
-                url = f"https://data-api.polymarket.com/positions?user={self._funder}"
+                # Data API v1 was retired in 2026; v2 wraps rows in "data". Reads the
+                # first 500 positions only; a miss falls into the "CLOB also failed" guard.
+                url = f"https://data-api.polymarket.com/v2/positions?user={self._funder}&limit=500"
                 resp = requests.get(url, timeout=10)
                 if resp.status_code == 200:
-                    positions = resp.json()
+                    positions = resp.json().get("data", [])
                     for p in positions:
-                        if p.get("asset") == token_id:
-                            return float(p.get("size", 0))
+                        if str(p.get("token_id")) == token_id:
+                            return float(p.get("current_size", 0))
                     # Position not found in data API
                     if clob_failed:
                         # Don't trust "not found" when CLOB also failed (stale data risk)

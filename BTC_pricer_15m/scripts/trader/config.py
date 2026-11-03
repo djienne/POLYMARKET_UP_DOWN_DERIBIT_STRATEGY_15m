@@ -12,7 +12,7 @@ import yaml
 
 DEFAULT_POLYGON_RPC_URLS: tuple[str, ...] = (
     "https://polygon-bor-rpc.publicnode.com",
-    "https://polygon-rpc.com",
+    "https://polygon.drpc.org",
 )
 
 DEFAULT_DRY_RUN_FRICTION_PCT = 0.01
