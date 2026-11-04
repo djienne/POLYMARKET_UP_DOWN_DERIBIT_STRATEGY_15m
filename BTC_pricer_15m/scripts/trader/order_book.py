@@ -2,8 +2,6 @@
 
 import csv
 import logging
-import os
-import tempfile
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -12,6 +10,8 @@ from pathlib import Path
 from statistics import median
 from typing import Optional
 import requests
+
+from scripts.trader._io import atomic_write_text
 
 CLOB_URL = "https://clob.polymarket.com"
 log = logging.getLogger(__name__)
@@ -29,20 +29,18 @@ def _record_clob_latency(dt_ms: float) -> None:
     if len(_LATENCY_WINDOW) < 2:
         return
     med = median(_LATENCY_WINDOW)
-    # Atomic write so the dashboard can't read a half-written file.
+    # Atomic write so the dashboard can't read a half-written file. The shared
+    # helper deletes its temp file when the rename fails (a reader holding the
+    # target open on a Windows bind mount); the old hand-rolled writer did not,
+    # and leaked ~770k .clob_*.tmp files into results/ by 2026-11. One attempt
+    # only: this runs on the CLOB request path and the file is a dashboard hint.
     try:
-        _LATENCY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(
-            dir=str(_LATENCY_PATH.parent), suffix=".tmp", prefix=".clob_"
+        # "<median_ms> <samples> <epoch>"
+        atomic_write_text(
+            _LATENCY_PATH,
+            f"{med:.1f} {len(_LATENCY_WINDOW)} {int(time.time())}\n",
+            retries=1,
         )
-        try:
-            os.chmod(tmp, 0o644)
-        except OSError:
-            pass
-        with os.fdopen(fd, "w") as f:
-            # "<median_ms> <samples> <epoch>"
-            f.write(f"{med:.1f} {len(_LATENCY_WINDOW)} {int(time.time())}\n")
-        Path(tmp).replace(_LATENCY_PATH)
     except OSError:
         pass
 
