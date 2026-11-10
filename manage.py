@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent
 STACK_DIR = ROOT / "BTC_pricer_15m"
 sys.path.insert(0, str(STACK_DIR))
 from scripts.live_runtime_state import prepare_live_start, set_live_desired
-from scripts.stack_services import STACK_SERVICES, STOP_SERVICES
+from scripts.stack_services import DASHBOARD_SERVICES, STACK_SERVICES, STOP_SERVICES
 
 SERVICES = STACK_SERVICES
 # Watchdog stops first: it is the supervisor, and leaving it running while the
@@ -153,8 +153,13 @@ def cmd_start(args: argparse.Namespace) -> int:
     compose_args = ["up", "-d"]
     if args.build:
         compose_args.append("--build")
-    compose_args.extend(SERVICES)
+    compose_args.extend(_start_services(args))
     return _compose(*compose_args).returncode
+
+
+def _start_services(args: argparse.Namespace) -> list[str]:
+    """Every service, minus the opt-in dashboard ones unless --dashboard."""
+    return [s for s in SERVICES if getattr(args, "dashboard", False) or s not in DASHBOARD_SERVICES]
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
@@ -168,7 +173,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
     compose_args = ["up", "-d", "--force-recreate"]
     if args.build:
         compose_args.append("--build")
-    compose_args.extend(SERVICES)
+    compose_args.extend(_start_services(args))
     return _compose(*compose_args).returncode
 
 
@@ -211,8 +216,9 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     health = _get_json(DASHBOARD_HEALTH_URL)
     bootstrap = _get_json(DASHBOARD_BOOTSTRAP_URL)
     if health is None:
-        print("\ndashboard health: unavailable")
-        return status or 1
+        # Not a failure by itself: the dashboard is off unless started with --dashboard.
+        print("\ndashboard health: unavailable (off by default; `start --dashboard` enables it)")
+        return status
     print(f"\ndashboard health: ok={health.get('ok')} mode={health.get('mode')} bot_live={health.get('bot_live')}")
     live = (bootstrap or {}).get("liveness") or {}
     if live:
@@ -230,13 +236,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage the local 15m Docker stack")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    start = sub.add_parser("start", help="Start the complete local stack, including live")
+    start = sub.add_parser("start", help="Start the complete local stack, including live (dashboard is opt-in)")
     start.add_argument("--build", action="store_true", help="Build images before starting")
+    start.add_argument("--dashboard", action="store_true", help="Also start the dashboard and docker-logs")
     start.add_argument("--acknowledge-safety-stop", action="store_true", help="Acknowledge a reviewed live watchdog diagnosis and resume")
     start.set_defaults(func=cmd_start)
 
     restart = sub.add_parser("restart", help="Force-recreate all local-live services")
     restart.add_argument("--build", action="store_true", help="Build images before restarting")
+    restart.add_argument("--dashboard", action="store_true", help="Also recreate the dashboard and docker-logs")
     restart.add_argument("--acknowledge-safety-stop", action="store_true", help="Acknowledge a reviewed live watchdog diagnosis and resume")
     restart.set_defaults(func=cmd_restart)
 

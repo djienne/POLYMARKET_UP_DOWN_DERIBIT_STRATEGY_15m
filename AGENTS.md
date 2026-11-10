@@ -39,6 +39,9 @@ intent and unresolved safety latches; never acknowledge a fault to bypass a gate
 Root `manage.py` manages `redis spot calc grid live docker-logs dashboard watchdog`
 and tries to start Docker Desktop on Windows. Dashboard is
 [127.0.0.1:5175](http://127.0.0.1:5175); backend container port is 8798.
+`dashboard` and `docker-logs` sit in compose profile `dashboard`: off unless
+`manage.py start/restart --dashboard` (or `--profile dashboard`), and the watchdog
+does not revive them. List them in `stack_services.DASHBOARD_SERVICES`.
 
 `.live_desired.json` is persistent live intent. The watchdog safety trigger is
 an independent latch requiring `--acknowledge-safety-stop` after diagnosis.

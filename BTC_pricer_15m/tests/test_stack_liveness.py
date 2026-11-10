@@ -45,14 +45,14 @@ def test_safety_latch_survives_time_unrelated_recovery_and_watchdog_restart(runt
     trigger = root / "diagnostics/live_watchdog_last_trigger.txt"
     os.utime(trigger, (1, 1))
     state[watchdog.LIVE_CONTAINER] = ("exited", "Exited")
-    state["polymarket_15m_docker_logs"] = ("exited", "Exited")
+    state["btc_pricer_15m_spot"] = ("exited", "Exited")
 
     for previous_recovery in (0, 2, 10**10):
         assert watchdog.live_trigger_active(previous_recovery)
         watchdog.recover(watchdog.stopped_containers(state), hold_live=True)
         initialize_live_desired(root, observed_running=False)
 
-    assert ("start", "polymarket_15m_docker_logs") in calls
+    assert ("start", "btc_pricer_15m_spot") in calls
     assert ("start", watchdog.LIVE_CONTAINER) not in calls
     assert safety_stop_active(root)
     with pytest.raises(RuntimeError, match="acknowledge-safety-stop"):
@@ -92,16 +92,16 @@ def test_corrupt_intent_is_stopped_not_overwritten(runtime):
     assert not desired_live_running(root)
 
 
-def test_running_unhealthy_dependency_blocks_live_but_not_independent_logs(runtime):
+def test_running_unhealthy_dependency_blocks_live_but_not_independent_spot(runtime):
     _, state, calls = runtime
     state["btc_pricer_15m_calc"] = ("running", "Up (unhealthy)")
     state[watchdog.LIVE_CONTAINER] = ("exited", "Exited")
-    state["polymarket_15m_docker_logs"] = ("exited", "Exited")
+    state["btc_pricer_15m_spot"] = ("exited", "Exited")
     ok, detail = watchdog.recover(watchdog.stopped_containers(state), hold_live=False)
     assert not ok
     assert "waiting for healthy btc_pricer_15m_calc" in detail
     assert ("start", watchdog.LIVE_CONTAINER) not in calls
-    assert ("start", "polymarket_15m_docker_logs") in calls
+    assert ("start", "btc_pricer_15m_spot") in calls
     state["btc_pricer_15m_calc"] = ("running", "Up (healthy)")
     assert watchdog.recover(watchdog.stopped_containers(state), hold_live=False)[0]
     assert ("start", watchdog.LIVE_CONTAINER) in calls
@@ -128,6 +128,14 @@ def test_recovery_rechecks_maintenance_before_any_start(runtime):
     (root / ".maintenance_stop").write_text(json.dumps({"reason": "maintenance"}))
     assert not watchdog.recover(["btc_pricer_15m_grid"], hold_live=False)[0]
     assert not calls
+
+
+def test_opt_in_dashboard_containers_are_never_revived():
+    # Absent (compose profile "dashboard" not enabled) must not count as down.
+    down = watchdog.stopped_containers({})
+    assert "polymarket_dashboard_15m" not in down
+    assert "polymarket_15m_docker_logs" not in down
+    assert "btc_pricer_15m_redis" in down
 
 
 def test_retry_backoff_remains_finite_after_many_failures(monkeypatch):

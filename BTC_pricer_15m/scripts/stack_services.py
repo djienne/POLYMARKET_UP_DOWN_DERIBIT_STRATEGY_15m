@@ -12,6 +12,9 @@ SERVICE_CONTAINERS = {
 }
 STACK_SERVICES = tuple(SERVICE_CONTAINERS)
 STOP_SERVICES = ("watchdog", "live", "dashboard", "docker-logs", "grid", "calc", "spot", "redis")
+# Off by default (compose profile "dashboard", 2026-11-10): starts include them
+# only with --dashboard, and the liveness watchdog never revives them.
+DASHBOARD_SERVICES = ("docker-logs", "dashboard")
 SERVICE_DEPENDENCIES = {
     "redis": (),
     "spot": ("redis",),

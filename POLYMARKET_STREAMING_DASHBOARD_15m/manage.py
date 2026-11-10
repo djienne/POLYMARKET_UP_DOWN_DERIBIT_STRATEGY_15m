@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 FREQTRADE_ROOT = ROOT.parent
 BOT_ROOT = FREQTRADE_ROOT / "BTC_pricer_15m"
 sys.path.insert(0, str(BOT_ROOT))
-from scripts.stack_services import SERVICE_CONTAINERS, STACK_SERVICES, STOP_SERVICES
+from scripts.stack_services import DASHBOARD_SERVICES, SERVICE_CONTAINERS, STACK_SERVICES, STOP_SERVICES
 BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 RUNTIME_DIR = ROOT / "runtime"
@@ -334,9 +334,14 @@ def start(args: argparse.Namespace) -> int:
         log(f"done. Dashboard: http://127.0.0.1:{FRONTEND_PORT}  (backend API: :{BACKEND_PORT})", prefix="start")
         return 0 if ok else 1
 
-    # Default: everything in Docker including dashboard
-    log("docker compose up -d redis calc grid dashboard ...", prefix="start")
-    docker_compose(["up", "-d", *ALL_START_SERVICES], prefix="start", warn_only=True)
+    # Default: the Docker stack; the dashboard is opt-in (--dashboard).
+    dashboard = getattr(args, "dashboard", False)
+    services = [s for s in ALL_START_SERVICES if dashboard or s not in DASHBOARD_SERVICES]
+    log(f"docker compose up -d {' '.join(services)} ...", prefix="start")
+    docker_compose(["up", "-d", *services], prefix="start", warn_only=True)
+    if not dashboard:
+        log("done. Dashboard is off by default (--dashboard or --native starts it).", prefix="start")
+        return 0
     ok = wait_for_port(FRONTEND_PORT, timeout_s=60)
     if not ok:
         log(
@@ -376,7 +381,9 @@ def stop(args: argparse.Namespace) -> int:
 
 def restart(args: argparse.Namespace) -> int:
     stop_args = argparse.Namespace(no_grid=args.no_grid)
-    start_args = argparse.Namespace(no_grid=args.no_grid, native=getattr(args, "native", False))
+    start_args = argparse.Namespace(
+        no_grid=args.no_grid, native=getattr(args, "native", False), dashboard=getattr(args, "dashboard", False)
+    )
     stop(stop_args)
     time.sleep(2.0)
     return start(start_args)
@@ -424,9 +431,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage the Polymarket dashboard and bot helpers.")
     sub = parser.add_subparsers(dest="command")
 
-    p_start = sub.add_parser("start", help="Start all services (Docker by default).")
+    p_start = sub.add_parser("start", help="Start the dry-run stack in Docker (dashboard is opt-in).")
     p_start.add_argument("--no-grid", action="store_true", help="Start only dashboard (native backend/frontend).")
     p_start.add_argument("--native", action="store_true", help="Run dashboard as native processes instead of Docker container.")
+    p_start.add_argument("--dashboard", action="store_true", help="Also start the dashboard container (+ docker-logs).")
     p_start.set_defaults(func=start)
 
     p_stop = sub.add_parser("stop", help="Stop dashboard and dry-run stack. Live trading is untouched.")
@@ -436,6 +444,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_restart = sub.add_parser("restart", help="Restart dashboard/dry-run stack.")
     p_restart.add_argument("--no-grid", action="store_true", help="Restart only dashboard.")
     p_restart.add_argument("--native", action="store_true", help="Run dashboard as native processes instead of Docker container.")
+    p_restart.add_argument("--dashboard", action="store_true", help="Also start the dashboard container (+ docker-logs).")
     p_restart.set_defaults(func=restart)
 
     p_status = sub.add_parser("status", help="Show dashboard, dry-run stack, and live-switch status.")

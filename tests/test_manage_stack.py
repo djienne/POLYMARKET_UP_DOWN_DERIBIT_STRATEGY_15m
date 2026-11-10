@@ -44,4 +44,7 @@ def test_root_start_cannot_acknowledge_a_safety_stop_implicitly(tmp_path, monkey
     assert calls == []
     assert ops.cmd_start(Namespace(build=False, acknowledge_safety_stop=True)) == 0
     assert desired_live_running(tmp_path / "results")
-    assert set(calls[0][2:]) == {"redis", "spot", "calc", "grid", "live", "docker-logs", "dashboard", "watchdog"}
+    # Dashboard services are opt-in: absent by default, included with --dashboard.
+    assert set(calls[0][2:]) == {"redis", "spot", "calc", "grid", "live", "watchdog"}
+    assert ops.cmd_restart(Namespace(build=False, acknowledge_safety_stop=False, dashboard=True)) == 0
+    assert set(calls[1][3:]) == {"redis", "spot", "calc", "grid", "live", "docker-logs", "dashboard", "watchdog"}

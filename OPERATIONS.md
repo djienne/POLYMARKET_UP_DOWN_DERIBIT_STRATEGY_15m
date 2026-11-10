@@ -16,6 +16,11 @@ Root `start` and `restart` explicitly include real-money `live` and the
 `local-live` profile. `stop` records stopped live intent before stopping the
 supervisor and remaining services. The dashboard is [localhost:5175](http://127.0.0.1:5175);
 container port 8798 is its backend, not a separately published host port.
+`dashboard` and `docker-logs` are off by default (compose profile `dashboard`,
+since 2026-11-10): a plain `docker compose up -d` or `restart_all.bat` skips
+them and the container watchdog does not revive them. Root `start`/`restart` and
+the dashboard-folder `start`/`restart` include them only with `--dashboard`
+(`--native`/`--no-grid` run the dashboard natively, as before).
 
 If the host URL fails despite a healthy container, compare `/api/health` inside
 the container and from a sibling service with the same request from Windows.

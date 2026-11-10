@@ -38,16 +38,20 @@ from pathlib import Path
 
 try:  # package import in tests; direct script in the watchdog image
     from scripts.live_runtime_state import desired_live_running, initialize_live_desired, safety_stop_active
-    from scripts.stack_services import SERVICE_CONTAINERS, SERVICE_DEPENDENCIES
+    from scripts.stack_services import DASHBOARD_SERVICES, SERVICE_CONTAINERS, SERVICE_DEPENDENCIES
 except ModuleNotFoundError:
     from live_runtime_state import desired_live_running, initialize_live_desired, safety_stop_active
-    from stack_services import SERVICE_CONTAINERS, SERVICE_DEPENDENCIES
+    from stack_services import DASHBOARD_SERVICES, SERVICE_CONTAINERS, SERVICE_DEPENDENCIES
 
 
 # Start order mirrors the compose `depends_on` graph. `docker start` bypasses
 # compose's `condition: service_healthy` gating, so we re-impose it here: each
 # tier must be healthy before the next is started.
-EXPECTED = tuple(name for service, name in SERVICE_CONTAINERS.items() if service != "watchdog")
+# DASHBOARD_SERVICES are opt-in, so absent or stopped is their normal state --
+# reviving them would undo that choice.
+EXPECTED = tuple(
+    name for service, name in SERVICE_CONTAINERS.items() if service != "watchdog" and service not in DASHBOARD_SERVICES
+)
 DEPENDENCIES = {
     SERVICE_CONTAINERS[service]: tuple(SERVICE_CONTAINERS[dep] for dep in dependencies)
     for service, dependencies in SERVICE_DEPENDENCIES.items()

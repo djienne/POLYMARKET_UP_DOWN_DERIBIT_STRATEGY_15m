@@ -264,6 +264,10 @@ services:
       dockerfile: Dockerfile
       target: docker-logs
     container_name: polymarket_15m_docker_logs
+    # Off by default with the dashboard (its only consumer): a plain
+    # `docker compose up -d` / restart_all.bat skips both. Opt in with
+    # `docker compose --profile dashboard up -d`; naming the service also works.
+    profiles: ["dashboard"]
     environment:
       DOCKER_CONTAINER: btc_pricer_15m_grid
     restart: unless-stopped
@@ -294,6 +298,8 @@ services:
       additional_contexts:
         runtime_helpers: .
     container_name: polymarket_dashboard_15m
+    # Off by default (2026-11-10, user); see docker-logs above.
+    profiles: ["dashboard"]
     env_file:
       - ../POLYMARKET_STREAMING_DASHBOARD_15m/.env
     environment:
